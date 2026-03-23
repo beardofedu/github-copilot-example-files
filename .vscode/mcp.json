@@ -1,0 +1,220 @@
+{
+  /*
+   * FILE: .vscode/mcp.json
+   *
+   * PURPOSE: Configure MCP (Model Context Protocol) servers for use with
+   *          GitHub Copilot in Visual Studio Code.
+   *
+   * DOCUMENTATION:
+   *   https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp
+   *   https://code.visualstudio.com/docs/copilot/chat/mcp-servers
+   *   https://github.com/modelcontextprotocol/servers (available MCP servers)
+   *
+   * WHAT IS MCP?
+   *   The Model Context Protocol (MCP) is an open standard that lets AI models
+   *   connect to external tools and data sources. In GitHub Copilot, MCP servers
+   *   extend Copilot's built-in capabilities with custom tools — for example,
+   *   fetching web pages, querying databases, or calling internal APIs.
+   *
+   * HOW IT WORKS:
+   *   1. You define MCP servers in this file.
+   *   2. VS Code starts those servers when you open the project.
+   *   3. In Copilot Chat (Agent mode), you can see available MCP tools by
+   *      clicking the tools icon.
+   *   4. Copilot can call those tools automatically when they're relevant,
+   *      or you can invoke them explicitly in your prompt.
+   *
+   * TWO SCOPES OF MCP CONFIGURATION:
+   *   - THIS FILE (.vscode/mcp.json): Project-scoped. Checked into source
+   *     control so all contributors share the same MCP tools. Best for
+   *     project-specific context (e.g., internal APIs, project databases).
+   *   - settings.json (VS Code user settings): User-scoped. Private to your
+   *     VS Code instance. Best for personal tools or tokens you don't want
+   *     to share (e.g., your personal GitHub token, private API keys).
+   *   Note: Don't configure the same server in both places — it can cause
+   *   conflicts and unexpected behavior.
+   *
+   * ENABLING MCP FOR ORGANIZATIONS AND ENTERPRISES:
+   *   If you're on a GitHub Copilot Business or Enterprise plan, MCP usage
+   *   must be enabled by your organization or enterprise administrator via the
+   *   "MCP servers in Copilot" policy in GitHub settings. Copilot Free, Pro,
+   *   and Pro+ users can use MCP without this policy.
+   *
+   * SECURITY REMINDER:
+   *   - Do NOT put secret API keys or tokens directly in this file.
+   *   - Use the "inputs" section to prompt for secrets at runtime (see below).
+   *   - This file is committed to source control and visible to all contributors.
+   *
+   * FILE FORMAT:
+   *   {
+   *     "inputs": [...],   // Optional: prompts for sensitive values at startup
+   *     "servers": { ... } // Required: map of server alias → server config
+   *   }
+   */
+
+  /*
+   * INPUTS SECTION:
+   *   Defines values that VS Code should prompt the user for before starting
+   *   the MCP servers. This is the safe way to handle secrets and per-user
+   *   configuration without hardcoding values in this file.
+   *
+   *   Each input object has:
+   *     "type": "promptString" — prompt the user to type a value
+   *             "pickString"   — prompt the user to choose from a list
+   *             "command"      — run a VS Code command to get the value
+   *     "id":          A unique identifier used to reference this input
+   *                    in server configs as "${input:<id>}"
+   *     "description": What the user sees when prompted
+   *     "password":    If true, the input is masked (for secrets)
+   *     "default":     Pre-filled default value
+   */
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "github-token",
+      "description": "GitHub Personal Access Token (for GitHub MCP server). Create one at https://github.com/settings/tokens with 'repo' scope.",
+      "password": true
+    }
+  ],
+
+  /*
+   * SERVERS SECTION:
+   *   A map of server aliases to their configuration. The alias (key) is
+   *   used to reference the server in tool calls and in agent configurations.
+   *
+   *   SERVER TYPES:
+   *   ┌──────┬─────────────────────────────────────────────────────────────┐
+   *   │ Type │ Description                                                 │
+   *   ├──────┼─────────────────────────────────────────────────────────────┤
+   *   │stdio │ Launches a local executable that communicates via stdin/    │
+   *   │      │ stdout. Most common type for open-source MCP servers.       │
+   *   │      │ Requires "command" and optional "args" and "env".           │
+   *   ├──────┼─────────────────────────────────────────────────────────────┤
+   *   │sse   │ Connects to a remote server via HTTP Server-Sent Events.    │
+   *   │      │ Good for shared/hosted MCP servers. Requires "url".         │
+   *   ├──────┼─────────────────────────────────────────────────────────────┤
+   *   │http  │ Connects to a remote server via HTTP (streaming). Modern    │
+   *   │      │ alternative to SSE. Requires "url".                         │
+   *   └──────┴─────────────────────────────────────────────────────────────┘
+   */
+  "servers": {
+
+    /*
+     * ─────────────────────────────────────────────────
+     * EXAMPLE 1: Fetch MCP Server (stdio type)
+     * ─────────────────────────────────────────────────
+     * What it does:
+     *   Gives Copilot the ability to fetch web pages and convert them to
+     *   Markdown. Useful for having Copilot reference documentation, tickets,
+     *   or any web content while working on a task.
+     *
+     * Source: https://github.com/modelcontextprotocol/servers/tree/main/src/fetch
+     *
+     * Prerequisites:
+     *   Requires `uvx` (from the `uv` Python package manager).
+     *   Install uv: https://docs.astral.sh/uv/getting-started/installation/
+     *   On macOS/Linux: curl -LsSf https://astral.sh/uv/install.sh | sh
+     *
+     * Tools provided:
+     *   - fetch: Retrieve the contents of a URL as Markdown
+     *
+     * Usage example in Copilot Chat:
+     *   "Fetch https://docs.github.com/en/copilot and summarize the key features."
+     */
+    "fetch": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+      /*
+       * OPTIONAL: Environment variables for the server process.
+       * Use "${input:<id>}" to reference values from the inputs section.
+       * "env": {
+       *   "SOME_CONFIG": "value"
+       * }
+       */
+    },
+
+    /*
+     * ─────────────────────────────────────────────────
+     * EXAMPLE 2: GitHub MCP Server (stdio type)
+     * ─────────────────────────────────────────────────
+     * What it does:
+     *   Connects Copilot directly to the GitHub API, enabling it to read and
+     *   interact with repositories, issues, pull requests, code, and more.
+     *   This dramatically expands what Copilot can do with your GitHub data.
+     *
+     * Source: https://github.com/github/github-mcp-server
+     * Docs:   https://docs.github.com/en/copilot/customizing-copilot/using-model-context-protocol/using-the-github-mcp-server
+     *
+     * Prerequisites:
+     *   Requires Docker Desktop (running) OR the GitHub CLI (`gh`).
+     *   This example uses Docker. To use gh CLI instead, change the command
+     *   to "gh" and args to ["mcp", "server"].
+     *
+     * Authentication:
+     *   This configuration references the "github-token" input defined in the
+     *   "inputs" section above. VS Code will prompt you for this value at
+     *   startup. Never hardcode your token here.
+     *
+     * Tools provided (partial list):
+     *   - get_file_contents, search_code, list_commits
+     *   - list_issues, create_issue, update_issue
+     *   - list_pull_requests, create_pull_request, get_pull_request_diff
+     *   - list_workflow_runs, get_job_logs, summarize_job_log_failures
+     *   - and many more...
+     *
+     * Usage example in Copilot Chat:
+     *   "List the open issues in this repo and help me prioritize them."
+     */
+    "github": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "--interactive",
+        "--env", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        /*
+         * "${input:github-token}" references the "github-token" input defined
+         * in the "inputs" section. VS Code will prompt the user for this value.
+         */
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github-token}"
+      }
+    },
+
+    /*
+     * ─────────────────────────────────────────────────
+     * EXAMPLE 3: Remote SSE Server (sse type)
+     * ─────────────────────────────────────────────────
+     * What it does:
+     *   Demonstrates how to connect to a hosted/remote MCP server via
+     *   HTTP Server-Sent Events (SSE). Use this for shared tools that run
+     *   on a server rather than the developer's local machine.
+     *
+     * DEVELOPMENT NOTE:
+     *   Replace the URL with your actual MCP server endpoint.
+     *   This example is intentionally non-functional (placeholder URL).
+     *   Hosted MCP servers are useful for:
+     *     - Connecting to internal company APIs
+     *     - Sharing tools across a team without requiring local installation
+     *     - Connecting to cloud-hosted services
+     *
+     * For a list of available MCP servers, see:
+     *   https://github.com/modelcontextprotocol/servers
+     */
+    "remote-example": {
+      "type": "sse",
+      "url": "https://example.com/mcp/sse",
+      /*
+       * Headers can be used to pass authentication tokens to remote servers.
+       * NEVER hardcode secrets here — use "${input:<id>}" references.
+       */
+      "headers": {
+        "Authorization": "Bearer ${input:github-token}"
+      }
+    }
+  }
+}
